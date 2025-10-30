@@ -1,4 +1,3 @@
-// backend/server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -9,16 +8,15 @@ dotenv.config();
 const app = express();
 app.set("trust proxy", 1);
 
-// ---- Allowed origins (Render env: ALLOWED_ORIGINS="https://<netlify>.netlify.app,https://your-domain,http://localhost:5173")
+// Allowed origins from env: ALLOWED_ORIGINS="https://your-netlify.netlify.app,https://your-domain,http://localhost:5173"
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);
 
-// ---- CORS BEFORE routes
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin) return cb(null, true);                 // allow curl/Postman
+    if (!origin) return cb(null, true);           // allow curl/Postman
     if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
@@ -26,20 +24,17 @@ const corsOptions = {
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization"],
 };
-app.use(cors(corsOptions));
 
-// ❌ OLD (breaks with path-to-regexp v6): app.options("*", cors());
-// ✅ Either omit entirely (preferred) or:
-app.options("(.*)", cors(corsOptions));   // catch-all preflight for Express 5
+app.use(cors(corsOptions));
+// ✅ Express 5-safe catch-all preflight:
+app.options(/.*/, cors(corsOptions));
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health checks
 app.get("/healthz", (req, res) => res.type("text").send("OK"));
 app.get("/api/healthz", (req, res) => res.json({ ok: true, ts: Date.now() }));
 
-// Contact form
 app.post("/api/messages", async (req, res) => {
   const { name, email, message } = req.body;
   if (!name || !email || !message) {
@@ -50,12 +45,12 @@ app.post("/api/messages", async (req, res) => {
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,   // App Password
+        pass: process.env.EMAIL_PASS,  // Gmail App Password
       },
     });
 
     const mailOptions = {
-      from: process.env.EMAIL_USER,     // avoid spoofing SPF/DMARC
+      from: process.env.EMAIL_USER,    // avoid SPF/DMARC issues
       to: process.env.EMAIL_USER,
       replyTo: email,
       subject: `New message from ${name}`,
